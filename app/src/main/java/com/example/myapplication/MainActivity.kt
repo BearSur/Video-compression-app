@@ -30,6 +30,7 @@ import com.otaliastudios.transcoder.TranscoderListener
 import com.otaliastudios.transcoder.strategy.DefaultVideoStrategy
 import com.otaliastudios.transcoder.strategy.RemoveTrackStrategy
 import java.io.File
+import java.util.ArrayList
 
 class MainActivity : AppCompatActivity() {
 
@@ -77,7 +78,7 @@ class MainActivity : AppCompatActivity() {
 
         saveButton.setOnClickListener {
             compressedVideoPaths.forEach { path ->
-                saveVideoToGallery(path)
+                saveVideoToGallery(path, showToast = true)
             }
         }
 
@@ -199,11 +200,11 @@ class MainActivity : AppCompatActivity() {
             }).transcode()
     }
 
-    private fun saveVideoToGallery(videoPath: String) {
+    private fun saveVideoToGallery(videoPath: String, showToast: Boolean): Uri? {
         val file = File(videoPath)
         if (!file.exists()) {
-            Toast.makeText(this, "文件不存在", Toast.LENGTH_SHORT).show()
-            return
+            if (showToast) Toast.makeText(this, "文件不存在", Toast.LENGTH_SHORT).show()
+            return null
         }
 
         val contentValues = ContentValues().apply {
@@ -230,13 +231,15 @@ class MainActivity : AppCompatActivity() {
                     contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
                     resolver.update(uri, contentValues, null, null)
                 }
-                Toast.makeText(this, "视频已保存到相册", Toast.LENGTH_SHORT).show()
+                if (showToast) Toast.makeText(this, "视频已保存到相册", Toast.LENGTH_SHORT).show()
+                return uri
             } catch (e: Exception) {
-                Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                if (showToast) Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         } else {
-            Toast.makeText(this, "无法创建媒体文件", Toast.LENGTH_SHORT).show()
+            if (showToast) Toast.makeText(this, "无法创建媒体文件", Toast.LENGTH_SHORT).show()
         }
+        return null
     }
 
     private fun shareVideo() {
@@ -245,16 +248,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val urisToShare = ArrayList(compressedVideoPaths.map { path ->
-            val videoFile = File(path)
-            FileProvider.getUriForFile(this, "${applicationContext.packageName}.provider", videoFile)
+        val urisToShare = ArrayList(compressedVideoPaths.mapNotNull { path ->
+            saveVideoToGallery(path, showToast = false)
         })
 
+        if (urisToShare.isEmpty()) {
+            Toast.makeText(this, "准备分享失败，无法获取视频URI", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val shareIntent = Intent().apply {
-            action = Intent.ACTION_SEND_MULTIPLE
-            putParcelableArrayListExtra(Intent.EXTRA_STREAM, urisToShare)
+            action = if (urisToShare.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE
             type = "video/mp4"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (urisToShare.size == 1) {
+                putExtra(Intent.EXTRA_STREAM, urisToShare.first())
+            } else {
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, urisToShare)
+            }
         }
         startActivity(Intent.createChooser(shareIntent, "分享视频"))
     }
@@ -264,9 +274,9 @@ class MainActivity : AppCompatActivity() {
             .setTitle("批量操作")
             .setMessage("所有视频已压缩完成。")
             .setPositiveButton("全部保存") { _, _ ->
-                compressedVideoPaths.forEach { saveVideoToGallery(it) }
+                compressedVideoPaths.forEach { saveVideoToGallery(it, showToast = true) }
             }
-            .setNegativeButton("全部自分享") { _, _ ->
+            .setNegativeButton("全部分享") { _, _ ->
                 shareVideo()
             }
             .setNeutralButton("取消", null)
