@@ -1,0 +1,69 @@
+<resources>
+    <string name="app_name">视频瘦身大师</string>
+    
+    <!-- 主界面 -->
+    <string name="select_video">选择视频</string>
+    <string name="compression_history">压缩历史</string>
+    <string name="settings">设置</string>
+    
+    <!-- 视频选择界面 -->
+    <string name="multi_select_mode">多选模式</string>
+    <string name="cancel_multi_select">取消多选</string>
+    <string name="next">下一步</string>
+    
+    <!-- 压缩设置 -->
+    <string name="preset_mode">预设模式</string>
+    <string name="recommended_mode">推荐模式 (平衡画质与大小)</string>
+    <string name="high_quality_mode">高画质模式 (画质优先)</string>
+    <string name="save_space_mode">节省空间模式 (压缩优先)</string>
+    <string name="custom_mode">自定义模式</string>
+    <string name="resolution">分辨率</string>
+    <string name="bitrate">码率</string>
+    <string name="frame_rate">帧率</string>
+    <string name="estimated_size">预估大小</string>
+    <string name="saved_percentage">节省</string>
+    <string name="start_compression">开始压缩</string>
+    
+    <!-- 压缩进度 -->
+    <string name="compressing">视频压缩中</string>
+    <string name="current_file">当前文件</string>
+    <string name="progress">进度</string>
+    <string name="remaining_time">剩余时间</string>
+    <string name="pause">暂停</string>
+    <string name="resume">继续</string>
+    <string name="cancel">取消</string>
+    
+    <!-- 结果界面 -->
+    <string name="original_video">原视频</string>
+    <string name="compressed_video">压缩后</string>
+    <string name="save_to_gallery">保存至相册</string>
+    <string name="share">分享</string>
+    <string name="replace_original">替换原视频</string>
+    <string name="play">播放</string>
+    <string name="pause_playback">暂停</string>
+    
+    <!-- 错误信息 -->
+    <string name="error_no_video_selected">请先选择视频</string>
+    <string name="error_compression_failed">压缩失败</string>
+    <string name="error_permission_denied">权限被拒绝</string>
+    
+    <!-- 数组资源 -->
+    <string-array name="resolutions">
+        <item>original</item>
+        <item>480p</item>
+        <item>720p</item>
+        <item>1080p</item>
+        <item>2K</item>
+        <item>4K</item>
+    </string-array>
+    
+    <string-array name="frame_rates">
+        <item>15</item>
+        <item>24</item>
+        <item>25</item>
+        <item>30</item>
+        <item>48</item>
+        <item>60</item>
+    </string-array>
+</resources>
+

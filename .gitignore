@@ -1,0 +1,21 @@
+# 编译和构建目录
+target/
+build/
+
+# IDE 和编辑器文件
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+
+# 操作系统和临时文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 敏感配置文件（根据实际情况添加）
+application-dev.properties
+application-prod.properties

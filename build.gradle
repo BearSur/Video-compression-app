@@ -1,0 +1,46 @@
+// 项目根目录的 build.gradle
+// 位置：C:\Users\kang\Desktop\CompressionMaster\build.gradle
+
+// 1. buildscript 块必须放在最前面
+buildscript {
+    // 注意：不要在 buildscript 中声明 repositories
+    // 所有仓库配置已经在 settings.gradle 中完成
+    dependencies {
+        // 使用与 Gradle 8.14 兼容的 Android Gradle 插件版本
+        // 你可以根据实际需要调整版本号
+        classpath 'com.android.tools.build:gradle:8.2.0'
+        // 如果使用其他插件，在这里添加
+        // classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0'
+    }
+}
+
+// 2. plugins 块 - 声明项目中使用的插件
+plugins {
+    // Android 应用插件 - apply false 表示不在根项目应用，只在子模块应用
+    id 'com.android.application' version '8.2.0' apply false
+    // Android 库插件
+    id 'com.android.library' version '8.2.0' apply false
+    // 如果使用 Kotlin，可以添加 Kotlin 插件
+    // id 'org.jetbrains.kotlin.android' version '1.9.0' apply false
+    // 如果使用 Kotlin 的序列化插件
+    // id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.0' apply false
+}
+
+// 3. 所有子项目的通用配置（如果需要）
+// allprojects {
+//     // 不要在这里添加 repositories！
+//     // 所有仓库配置都在 settings.gradle 中
+// }
+
+// 4. 清理任务 - 清理构建目录
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+// 5. 自定义任务示例（可选）
+// task printProjectInfo {
+//     doLast {
+//         println "项目名称: ${rootProject.name}"
+//         println "项目目录: ${rootProject.projectDir}"
+//     }
+// }
