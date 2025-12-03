@@ -1,21 +1,27 @@
-# 编译和构建目录
-target/
-build/
+# Compiled class file
+*.class
 
-# IDE 和编辑器文件
-.idea/
-*.iml
-.project
-.classpath
-.settings/
-
-# 操作系统和临时文件
-.DS_Store
-Thumbs.db
-
-# 日志文件
+# Log file
 *.log
 
-# 敏感配置文件（根据实际情况添加）
-application-dev.properties
-application-prod.properties
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+replay_pid*
+
+# Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
+.kotlin/
