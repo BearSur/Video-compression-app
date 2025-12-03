@@ -1,44 +1,46 @@
 name: Android CI - Build APK
 
-# 定义触发条件：当代码推送到 main 分支或有拉取请求时运行
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # 允许在 GitHub 网页上手动触发工作流
   workflow_dispatch:
 
 jobs:
   build:
-    # 在 GitHub 提供的最新 Ubuntu 系统上运行
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 拉取你的代码到虚拟环境
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. 设置 Java 环境（Android开发需要）
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. 设置 Android SDK （关键步骤：无需本地安装）
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4. 授予 Gradle Wrapper 执行权限
+      # 🔄 新增步骤：缓存 Gradle 依赖，以加速构建
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # 5. 执行项目构建（生成 Debug APK）
       - name: Build with Gradle
         run: ./gradlew assembleDebug
 
-      # 6. 上传构建产物（APK文件），便于下载
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
