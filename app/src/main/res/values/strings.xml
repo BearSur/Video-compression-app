@@ -1,3 +1,12 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">视频压缩</string>
+    <string name="select_video">选择视频</string>
+    <string name="no_video_selected">未选择视频</string>
+    <string name="high_quality">高画质</string>
+    <string name="medium_quality">中等画质</string>
+    <string name="low_quality">低画质</string>
+    <string name="compress_video">压缩视频</string>
+    <string name="save">保存</string>
+    <string name="share">分享</string>
+    <string name="replace">替换</string>
 </resources>
