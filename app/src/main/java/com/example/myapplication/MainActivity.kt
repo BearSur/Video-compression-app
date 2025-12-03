@@ -4,7 +4,6 @@ package com.example.myapplication
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.RecoverableSecurityException
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,7 +20,6 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -43,7 +41,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var postCompressionLayout: LinearLayout
     private lateinit var saveButton: Button
     private lateinit var shareButton: Button
-    private lateinit var replaceButton: Button
     private lateinit var compressionOptionsRadioGroup: RadioGroup
 
     private val selectedVideoUris = mutableListOf<Uri>()
@@ -51,14 +48,6 @@ class MainActivity : AppCompatActivity() {
     private val STORAGE_PERMISSION_CODE = 101
     private var totalVideosToCompress = 0
     private var currentVideoIndex = 0
-
-    private val deleteRequestLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "删除原始视频失败或被取消", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,7 +61,6 @@ class MainActivity : AppCompatActivity() {
         postCompressionLayout = findViewById(R.id.post_compression_layout)
         saveButton = findViewById(R.id.save_button)
         shareButton = findViewById(R.id.share_button)
-        replaceButton = findViewById(R.id.replace_button)
         compressionOptionsRadioGroup = findViewById(R.id.compression_options_radiogroup)
 
         requestStoragePermission()
@@ -88,14 +76,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         saveButton.setOnClickListener {
-            compressedVideoPaths.firstOrNull()?.let { path ->
+            compressedVideoPaths.forEach { path ->
                 saveVideoToGallery(path)
             }
         }
 
         shareButton.setOnClickListener { shareVideo() }
-
-        replaceButton.setOnClickListener { showReplaceConfirmationDialog() }
     }
 
     private fun selectVideo() {
@@ -254,75 +240,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun shareVideo() {
-        compressedVideoPaths.firstOrNull()?.let { path ->
+        if (compressedVideoPaths.isEmpty()) {
+            Toast.makeText(this, "没有可分享的视频", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val urisToShare = ArrayList(compressedVideoPaths.map { path ->
             val videoFile = File(path)
-            val videoUri = FileProvider.getUriForFile(this, "${applicationContext.packageName}.provider", videoFile)
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "video/mp4"
-                putExtra(Intent.EXTRA_STREAM, videoUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(shareIntent, "分享视频"))
-        }
-    }
+            FileProvider.getUriForFile(this, "${applicationContext.packageName}.provider", videoFile)
+        })
 
-    private fun showReplaceConfirmationDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("替换视频")
-            .setMessage("这将保存压缩后的视频到相册，并请求删除原始视频。确定吗？")
-            .setPositiveButton("是") { _, _ -> replaceVideo() }
-            .setNegativeButton("否", null)
-            .show()
-    }
-
-    private fun replaceVideo() {
-        compressedVideoPaths.firstOrNull()?.let { saveVideoToGallery(it) }
-        if (selectedVideoUris.isNotEmpty()) {
-            deleteOriginalVideos(listOf(selectedVideoUris.first()))
+        val shareIntent = Intent().apply {
+            action = Intent.ACTION_SEND_MULTIPLE
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, urisToShare)
+            type = "video/mp4"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
+        startActivity(Intent.createChooser(shareIntent, "分享视频"))
     }
 
     private fun showBatchOperationDialog() {
-        val builder = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("批量操作")
             .setMessage("所有视频已压缩完成。")
-            .setPositiveButton("批量保存") { _, _ ->
+            .setPositiveButton("全部保存") { _, _ ->
                 compressedVideoPaths.forEach { saveVideoToGallery(it) }
+            }
+            .setNegativeButton("全部自分享") { _, _ ->
+                shareVideo()
             }
             .setNeutralButton("取消", null)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setNegativeButton("批量替换") { _, _ ->
-                compressedVideoPaths.forEach { saveVideoToGallery(it) }
-                deleteOriginalVideos(selectedVideoUris)
-            }
-        }
-        builder.show()
-    }
-
-    private fun deleteOriginalVideos(uris: List<Uri>) {
-        if (uris.isEmpty()) return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // Android 11+
-            val pendingIntent = MediaStore.createDeleteRequest(contentResolver, uris)
-            val request = IntentSenderRequest.Builder(pendingIntent.intentSender).build()
-            deleteRequestLauncher.launch(request)
-        } else {
-            uris.forEach { uri ->
-                try {
-                    contentResolver.delete(uri, null, null)
-                    Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
-                } catch (e: SecurityException) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
-                        val intentSender = e.userAction.actionIntent.intentSender
-                        val request = IntentSenderRequest.Builder(intentSender).build()
-                        deleteRequestLauncher.launch(request)
-                    } else {
-                        Toast.makeText(this, "删除原始视频失败，权限不足", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
+            .show()
     }
 
     private fun requestStoragePermission() {
