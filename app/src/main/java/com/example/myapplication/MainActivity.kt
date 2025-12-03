@@ -269,7 +269,7 @@ class MainActivity : AppCompatActivity() {
     private fun showReplaceConfirmationDialog() {
         AlertDialog.Builder(this)
             .setTitle("替换视频")
-            .setMessage("这将保存压缩后的视频到相册，并删除原始视频。确定吗？")
+            .setMessage("这将保存压缩后的视频到相册，并请求删除原始视频。确定吗？")
             .setPositiveButton("是") { _, _ -> replaceVideo() }
             .setNegativeButton("否", null)
             .show()
@@ -283,18 +283,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showBatchOperationDialog() {
-        AlertDialog.Builder(this)
+        val builder = AlertDialog.Builder(this)
             .setTitle("批量操作")
             .setMessage("所有视频已压缩完成。")
             .setPositiveButton("批量保存") { _, _ ->
                 compressedVideoPaths.forEach { saveVideoToGallery(it) }
             }
-            .setNegativeButton("批量替换") { _, _ ->
+            .setNeutralButton("取消", null)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setNegativeButton("批量替换") { _, _ ->
                 compressedVideoPaths.forEach { saveVideoToGallery(it) }
                 deleteOriginalVideos(selectedVideoUris)
             }
-            .setNeutralButton("取消", null)
-            .show()
+        }
+        builder.show()
     }
 
     private fun deleteOriginalVideos(uris: List<Uri>) {
@@ -305,22 +308,19 @@ class MainActivity : AppCompatActivity() {
             val request = IntentSenderRequest.Builder(pendingIntent.intentSender).build()
             deleteRequestLauncher.launch(request)
         } else {
-            var failedDeletions = 0
             uris.forEach { uri ->
                 try {
                     contentResolver.delete(uri, null, null)
+                    Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
                 } catch (e: SecurityException) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
-                        failedDeletions++
+                        val intentSender = e.userAction.actionIntent.intentSender
+                        val request = IntentSenderRequest.Builder(intentSender).build()
+                        deleteRequestLauncher.launch(request)
                     } else {
-                        failedDeletions++
+                        Toast.makeText(this, "删除原始视频失败，权限不足", Toast.LENGTH_SHORT).show()
                     }
                 }
-            }
-            if (failedDeletions > 0) {
-                 Toast.makeText(this, "$failedDeletions 个原始视频删除失败", Toast.LENGTH_LONG).show()
-            } else {
-                 Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
             }
         }
     }
