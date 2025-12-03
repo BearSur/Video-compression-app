@@ -1,8 +1,11 @@
+
 package com.example.myapplication
 
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.RecoverableSecurityException
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -18,6 +21,7 @@ import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -43,10 +47,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var compressionOptionsRadioGroup: RadioGroup
 
     private val selectedVideoUris = mutableListOf<Uri>()
-    private var compressedVideoPath: String? = null
+    private val compressedVideoPaths = mutableListOf<String>()
     private val STORAGE_PERMISSION_CODE = 101
     private var totalVideosToCompress = 0
     private var currentVideoIndex = 0
+
+    private val deleteRequestLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "删除原始视频失败或被取消", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,9 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         requestStoragePermission()
 
-        selectVideoButton.setOnClickListener {
-            selectVideo()
-        }
+        selectVideoButton.setOnClickListener { selectVideo() }
 
         compressButton.setOnClickListener {
             if (selectedVideoUris.isNotEmpty()) {
@@ -78,21 +88,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         saveButton.setOnClickListener {
-            Toast.makeText(this, "视频已保存至 $compressedVideoPath", Toast.LENGTH_SHORT).show()
+            compressedVideoPaths.firstOrNull()?.let { path ->
+                saveVideoToGallery(path)
+            }
         }
 
-        shareButton.setOnClickListener {
-            shareVideo()
-        }
+        shareButton.setOnClickListener { shareVideo() }
 
-        replaceButton.setOnClickListener {
-            showReplaceConfirmationDialog()
-        }
+        replaceButton.setOnClickListener { showReplaceConfirmationDialog() }
     }
 
     private fun selectVideo() {
         postCompressionLayout.visibility = View.GONE
         compressButton.visibility = View.VISIBLE
+        selectedVideoUris.clear()
+        compressedVideoPaths.clear()
+
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "video/*"
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -100,11 +111,8 @@ class MainActivity : AppCompatActivity() {
         selectVideoLauncher.launch(intent)
     }
 
-    private val selectVideoLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    private val selectVideoLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            selectedVideoUris.clear()
             result.data?.let { data ->
                 if (data.clipData != null) {
                     val clipData = data.clipData!!
@@ -136,6 +144,8 @@ class MainActivity : AppCompatActivity() {
         }
         totalVideosToCompress = selectedVideoUris.size
         currentVideoIndex = 0
+        compressedVideoPaths.clear()
+        compressButton.visibility = View.GONE
         compressNextVideo()
     }
 
@@ -144,7 +154,11 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 progressBar.visibility = View.GONE
                 videoInfoTextView.text = "所有视频压缩完成！"
-                postCompressionLayout.visibility = if (totalVideosToCompress == 1) View.VISIBLE else View.GONE
+                if (totalVideosToCompress > 1) {
+                    showBatchOperationDialog()
+                } else {
+                    postCompressionLayout.visibility = View.VISIBLE
+                }
                 compressButton.visibility = View.VISIBLE
             }
             return
@@ -172,15 +186,14 @@ class MainActivity : AppCompatActivity() {
                 override fun onTranscodeProgress(progress: Double) {
                     runOnUiThread {
                         progressBar.visibility = View.VISIBLE
-                        progressBar.progress = (progress * 100).toInt()
+                        val overallProgress = ((currentVideoIndex.toDouble() + progress) / totalVideosToCompress * 100).toInt()
+                        progressBar.progress = overallProgress
                         videoInfoTextView.text = "正在压缩视频 ${currentVideoIndex + 1} / $totalVideosToCompress..."
                     }
                 }
 
                 override fun onTranscodeCompleted(successCode: Int) {
-                    if (totalVideosToCompress == 1) {
-                        compressedVideoPath = destinationPath.path
-                    }
+                    compressedVideoPaths.add(destinationPath.path)
                     currentVideoIndex++
                     compressNextVideo()
                 }
@@ -191,21 +204,59 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onTranscodeFailed(exception: Throwable) {
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "视频 ${currentVideoIndex + 1} 压缩失败: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    }
                     currentVideoIndex++
                     compressNextVideo()
                 }
             }).transcode()
     }
 
+    private fun saveVideoToGallery(videoPath: String) {
+        val file = File(videoPath)
+        if (!file.exists()) {
+            Toast.makeText(this, "文件不存在", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES)
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val resolver = contentResolver
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        if (uri != null) {
+            try {
+                resolver.openOutputStream(uri).use { outputStream ->
+                    file.inputStream().use { inputStream ->
+                        inputStream.copyTo(outputStream!!)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
+                }
+                Toast.makeText(this, "视频已保存到相册", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(this, "无法创建媒体文件", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private fun shareVideo() {
-        compressedVideoPath?.let {
-            val videoFile = File(it)
-            val videoUri = FileProvider.getUriForFile(
-                this,
-                "${applicationContext.packageName}.provider",
-                videoFile
-            )
+        compressedVideoPaths.firstOrNull()?.let { path ->
+            val videoFile = File(path)
+            val videoUri = FileProvider.getUriForFile(this, "${applicationContext.packageName}.provider", videoFile)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "video/mp4"
                 putExtra(Intent.EXTRA_STREAM, videoUri)
@@ -218,24 +269,58 @@ class MainActivity : AppCompatActivity() {
     private fun showReplaceConfirmationDialog() {
         AlertDialog.Builder(this)
             .setTitle("替换视频")
-            .setMessage("您确定要删除原始视频并保留压缩版本吗？")
-            .setPositiveButton("是") { _, _ ->
-                replaceVideo()
-            }
+            .setMessage("这将保存压缩后的视频到相册，并删除原始视频。确定吗？")
+            .setPositiveButton("是") { _, _ -> replaceVideo() }
             .setNegativeButton("否", null)
             .show()
     }
 
     private fun replaceVideo() {
-        if (selectedVideoUris.size == 1) {
-            selectedVideoUris.first()?.let {
+        compressedVideoPaths.firstOrNull()?.let { saveVideoToGallery(it) }
+        if (selectedVideoUris.isNotEmpty()) {
+            deleteOriginalVideos(listOf(selectedVideoUris.first()))
+        }
+    }
+
+    private fun showBatchOperationDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("批量操作")
+            .setMessage("所有视频已压缩完成。")
+            .setPositiveButton("批量保存") { _, _ ->
+                compressedVideoPaths.forEach { saveVideoToGallery(it) }
+            }
+            .setNegativeButton("批量替换") { _, _ ->
+                compressedVideoPaths.forEach { saveVideoToGallery(it) }
+                deleteOriginalVideos(selectedVideoUris)
+            }
+            .setNeutralButton("取消", null)
+            .show()
+    }
+
+    private fun deleteOriginalVideos(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // Android 11+
+            val pendingIntent = MediaStore.createDeleteRequest(contentResolver, uris)
+            val request = IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+            deleteRequestLauncher.launch(request)
+        } else {
+            var failedDeletions = 0
+            uris.forEach { uri ->
                 try {
-                    contentResolver.delete(it, null, null)
-                    Toast.makeText(this, "原始视频已替换", Toast.LENGTH_SHORT).show()
-                    videoInfoTextView.text = "原始视频已替换。压缩视频位于: $compressedVideoPath"
+                    contentResolver.delete(uri, null, null)
                 } catch (e: SecurityException) {
-                    Toast.makeText(this, "删除原始视频失败", Toast.LENGTH_SHORT).show()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+                        failedDeletions++
+                    } else {
+                        failedDeletions++
+                    }
                 }
+            }
+            if (failedDeletions > 0) {
+                 Toast.makeText(this, "$failedDeletions 个原始视频删除失败", Toast.LENGTH_LONG).show()
+            } else {
+                 Toast.makeText(this, "原始视频已删除", Toast.LENGTH_SHORT).show()
             }
         }
     }
